@@ -1,0 +1,859 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>University Smart Gateway</title>
+    <script src="https://unpkg.com/html5-qrcode"></script> 
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600&display=swap" rel="stylesheet">
+    <style>
+        :root { --primary: #00d2ff; --secondary: #3a7bd5; --accent: #ff007a; --glass: rgba(255, 255, 255, 0.1); --success: #2ecc71; --bg-dark: #0f0c29; }
+        body { margin: 0; font-family: 'Poppins', sans-serif; background: linear-gradient(135deg, #0f0c29, #302b63, #24243e); color: white; min-height: 100vh; display: flex; flex-direction: column; align-items: center; overflow-x: hidden; }
+        
+        .overlay-auth { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.85); backdrop-filter: blur(20px); z-index: 9999; display: flex; justify-content: center; align-items: center; transition: 0.5s; }
+        .glass-card { background: var(--glass); backdrop-filter: blur(15px); border: 1px solid rgba(255,255,255,0.1); border-radius: 20px; padding: 30px; box-shadow: 0 15px 35px rgba(0,0,0,0.5); width: 90%; max-width: 500px; text-align: center; }
+        
+        .nav-tabs { display: flex; gap: 8px; margin-bottom: 20px; justify-content: center; flex-wrap: wrap; }
+        .tab-btn { padding: 12px 18px; border-radius: 12px; border: none; background: rgba(255,255,255,0.05); color: white; cursor: pointer; font-size: 13px; transition: 0.3s; flex: 1 1 auto; min-width: 80px; border: 1px solid rgba(255,255,255,0.1); }
+        .tab-btn.active { background: var(--primary); font-weight: bold; box-shadow: 0 0 15px var(--primary); border-color: var(--primary); color: #000; }
+        
+        .role-selector { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; margin-bottom: 15px; }
+        .role-btn { flex: 1 1 25%; background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.1); color: white; padding: 10px; border-radius: 10px; cursor: pointer; transition: 0.3s; font-size: 11px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 5px; }
+        .role-btn:hover { background: rgba(255,255,255,0.1); }
+        .role-btn.active-role { background: var(--primary); color: #000; font-weight: bold; border-color: var(--primary); box-shadow: 0 0 15px rgba(0, 210, 255, 0.4); transform: scale(1.05); }
+        .dynamic-fields { display: none; text-align: left; }
+        
+        input, select { width: 100%; padding: 12px; margin: 8px 0; border-radius: 10px; border: 1px solid rgba(255,255,255,0.1); background: rgba(0,0,0,0.2); color: white; box-sizing: border-box; font-family: inherit; }
+        select option { background: #302b63; color: white; }
+        button { width: 100%; padding: 14px; margin: 10px 0; border-radius: 10px; border: none; font-weight: bold; cursor: pointer; transition: 0.3s; }
+        .btn-primary { background: linear-gradient(45deg, var(--primary), var(--secondary)); color: white; }
+        
+        #studentDisplay { display: none; margin-top: 20px; padding: 25px; border-radius: 20px; background: rgba(255,255,255,0.08); border-left: 6px solid var(--success); text-align: center; width: 100%; box-sizing: border-box; }
+        #studentPhoto { width: 130px; height: 130px; border-radius: 18px; object-fit: cover; border: 3px solid var(--primary); margin-bottom: 15px; }
+        #reader { width: 100%; border-radius: 12px; overflow: hidden; background: #000; }
+        
+        .uog-dept { border-left: 3px solid var(--primary); }
+
+        /* ======== GHOST CURSOR BASE CSS ======== */
+        #speedcapture { pointer-events: none; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; z-index: 9999; overflow: hidden; }
+        .ghost { position: absolute; left: calc(50% - 50px); top: calc(50% - 50px); border-radius: 100%; animation: swirl 2s ease-in-out infinite alternate; transform: translateX(-100px); box-sizing: border-box; }
+        .ghost:before { content: ''; position: absolute; width: 10px; height: 10px; background: #fff; border-radius: 100%; top: calc(50% - 5px); left: calc(50% - 5px); animation: bubbling 2s linear infinite; filter: blur(5px); }
+        .ghost.face .arms { width: 120px; height: 30px; position: absolute; left: -10px; top: 45px; z-index: -1; border-radius: 50px; }
+        .ghost.face .arm { position: absolute; left: 0; top: 0; height: 30px; width: 30px; border-radius: 100px 0 0 0; border-top: 15px solid #fff; border-left: 15px solid #fff; animation: wave 2s ease-in-out infinite alternate; transform-origin: top right; transform: rotate(20deg); opacity: 0.5; box-sizing: border-box; }
+        .ghost.face .arm:before { content: ''; position: absolute; width: 15px; height: 15px; background: #fff; bottom: -5px; left: -15px; border-radius: 100%; }
+        .ghost.face .arm:last-of-type { left: auto; right: 0; transform-origin: top left; border-radius: 0 100px 0 0; border-top: 15px solid #fff; border-right: 15px solid #fff; border-left: none; }
+        .ghost.face .arm:last-of-type:before { left: auto; right: -15px; }
+        .ghost.face .inner { position: absolute; width: 100%; height: 100%; border-radius: 100%; animation: look1 4s ease-in-out infinite; transform-style: preserve-3d; }
+        .ghost.face .mouth { position: absolute; width: 20px; height: 10px; border-radius: 5px 5px 150px 150px; bottom: 20px; left: 40px; border-bottom: 2px solid #000; border-right: 2px solid #000; border-left: 2px solid #000; box-sizing: border-box; }
+        .ghost.face .mouth:before { content: ''; position: absolute; width: 7.5px; height: 7.5px; background: #000; border-radius: 100%; top: -25px; left: -17.5px; box-shadow: 45px 0 0 #000; }
+        @keyframes bubbling { 0% { box-shadow: 50px 150px 0 rgba(255,255,255,0); } 50% { box-shadow: -100px 0px 0 rgba(255,255,255,1); } 100% { box-shadow: 50px -150px 0 rgba(255,255,255,0); } }
+        @keyframes wave { to { transform: rotate(-20deg); } }
+        @keyframes look1 { 0%, 75%, 100% { transform: translateX(-20px) rotateY(-10deg); } 25% { transform: translateX(20px) rotateY(10deg); } }
+        @keyframes swirl { 100% { transform: translateX(100px); } }
+        /* ======================================= */
+    </style>
+</head>
+<body>
+
+<div id="loginOverlay" class="overlay-auth">
+    <div class="glass-card" style="max-height: 90vh; overflow-y: auto;">
+        <div id="loginSection">
+            <h2 style="letter-spacing: 2px;">University GATEWAY</h2>
+            <p style="font-size: 12px; opacity: 0.7;">Authorized Personnel Only</p>
+            <input type="text" id="loginName" placeholder="Operator Name">
+            <input type="password" id="loginRoll" placeholder="Passcode (Optional)">
+            <button onclick="handleLogin()" class="btn-primary">ENTER TERMINAL</button>
+            <p style="font-size: 13px;">New User? <a href="#" onclick="showSignUp()" style="color:var(--primary);">Register Now</a></p>
+        </div>
+
+        <div id="signUpSection" style="display:none; text-align: left;">
+            <h3 style="text-align:center; margin-top:0;">SYSTEM ENROLLMENT</h3>
+            
+            <label style="font-size: 11px; margin-left: 5px; color: var(--primary);">Select Category:</label>
+            <div class="role-selector">
+                <button type="button" class="role-btn active-role" onclick="selectRole('student', this)"><span style="font-size: 18px;">🎓</span> Student</button>
+                <button type="button" class="role-btn" onclick="selectRole('faculty', this)"><span style="font-size: 18px;">👨‍🏫</span> Faculty</button>
+                <button type="button" class="role-btn" onclick="selectRole('staff', this)"><span style="font-size: 18px;">💼</span> Staff</button>
+                <button type="button" class="role-btn" onclick="selectRole('guard', this)"><span style="font-size: 18px;">🛡️</span> Guard</button>
+                <button type="button" class="role-btn" onclick="selectRole('visitor', this)"><span style="font-size: 18px;">🚶</span> Visitor</button>
+                <button type="button" class="role-btn" onclick="selectRole('vehicle', this)"><span style="font-size: 18px;">🚗</span> Vehicle</button>
+            </div>
+            
+            <input type="hidden" id="regType" value="student">
+            <input type="text" id="regName" placeholder="Full Name">
+            <input type="text" id="regRoll" placeholder="Roll Number / ID">
+
+            <datalist id="uog_departments">
+                <option value="Computer Science">
+                <option value="Information Technology">
+                <option value="Software Engineering">
+                <option value="Physics">
+                <option value="Chemistry">
+                <option value="Mathematics">
+                <option value="Botany">
+                <option value="Zoology">
+                <option value="English">
+                <option value="Mass Communication">
+                <option value="Business Administration (BBA)">
+                <option value="Commerce">
+                <option value="Law">
+                <option value="Electrical Engineering">
+                <option value="Chemical Engineering">
+            </datalist>
+            
+            <div id="studentFields" class="dynamic-fields" style="display:block;">
+                <input list="uog_departments" id="regDeptStd" class="uog-dept" placeholder="Select Department...">
+                <input type="text" id="regSession" placeholder="Session (e.g. 2022-26)">
+                <input type="text" id="regGuardianName" placeholder="Guardian Name (Father/Mother)">
+                <input type="text" id="regGuardianPhone" placeholder="Guardian Phone (e.g. 03001234567)">
+            </div>
+            
+            <div id="facultyFields" class="dynamic-fields">
+                <input list="uog_departments" id="regDeptFac" class="uog-dept" placeholder="Select Department...">
+                <select id="regDesigFac">
+                    <option value="" disabled selected>Select Designation</option>
+                    <option value="Lecturer">Lecturer</option>
+                    <option value="Assistant Professor">Assistant Professor</option>
+                    <option value="Associate Professor">Associate Professor</option>
+                    <option value="Professor">Professor</option>
+                    <option value="Head of Department (HOD)">Head of Department (HOD)</option>
+                    <option value="Dean">Dean</option>
+                </select>
+            </div>
+
+            <div id="staffFields" class="dynamic-fields">
+                <input list="uog_departments" id="regDeptStaff" class="uog-dept" placeholder="Select Department (If any)...">
+                <input type="text" id="regDesigStaff" placeholder="Designation (e.g. Lab Assistant, Clerk)">
+            </div>
+            
+            <div id="guardFields" class="dynamic-fields">
+                <select id="regDesigGuard">
+                    <option value="" disabled selected>Select Guard Rank</option>
+                    <option value="Security Guard">Security Guard</option>
+                    <option value="Head Guard">Head Guard</option>
+                    <option value="Security Supervisor">Security Supervisor</option>
+                    <option value="Chief Security Officer">Chief Security Officer</option>
+                </select>
+            </div>
+            
+            <div id="visitorFields" class="dynamic-fields">
+                <input type="text" id="regCNIC" placeholder="CNIC Number">
+                <input type="text" id="regPurpose" placeholder="Purpose of Visit (e.g. Inquiry, Meeting)">
+                
+                <select id="regVisRefType" onchange="toggleVisRef(this.value)" style="border-left: 3px solid #f39c12;">
+                    <option value="" disabled selected>Reference Inside University?</option>
+                    <option value="None">Direct / No Reference</option>
+                    <option value="Student">Student Reference</option>
+                    <option value="Faculty">Faculty Reference</option>
+                    <option value="Staff">Staff Reference</option>
+                    <option value="Guard">Guard Reference</option>
+                </select>
+                <input type="text" id="regVisRefDetails" placeholder="Ref Name & Roll#/ID" style="display:none; border-left: 3px solid #f39c12;">
+            </div>
+            
+            <div id="vehicleFields" class="dynamic-fields">
+                <select id="regVehCategory">
+                    <option value="" disabled selected>Select Vehicle Category</option>
+                    <option value="Car">Car</option>
+                    <option value="Bike">Bike</option>
+                    <option value="Bus">Bus</option>
+                    <option value="Riksha">Riksha</option>
+                    <option value="Tractor">Tractor</option>
+                </select>
+                <select id="regVehOwnerType">
+                    <option value="" disabled selected>Vehicle Belongs To (Role)</option>
+                    <option value="Student">Student</option>
+                    <option value="Faculty">Faculty</option>
+                    <option value="Staff">Staff</option>
+                    <option value="Guard">Guard</option>
+                    <option value="Visitor">Visitor</option>
+                    <option value="University">University</option>
+                </select>
+                <select id="regVehOwnership">
+                    <option value="" disabled selected>Ownership Type</option>
+                    <option value="University Owned">University Owned</option>
+                    <option value="Private">Private</option>
+                </select>
+                <input type="text" id="regVehPlate" placeholder="Number Plate (e.g. LEB-1234)">
+                <input type="text" id="regVehCNIC" placeholder="Driver CNIC">
+                <input type="text" id="regVehContact" placeholder="Driver Contact No.">
+            </div>
+            
+            <label style="font-size: 11px; margin-left: 5px; color: var(--primary); display:block; margin-top:10px;">Upload Reference Photo:</label>
+            <input type="file" id="regPhoto" capture="user" accept="image/*">
+            
+            <label style="font-size: 11px; margin-left: 5px; color: var(--primary); margin-top:10px; display:block;">Setup Biometric:</label>
+            <button type="button" id="fingerBtn" onclick="linkFingerprint()" class="btn-primary" style="background: #e67e22; padding: 10px;">☝️ LINK FINGERPRINT</button>
+            <p id="authStatus" style="font-size:11px; text-align:center; color:white; margin: 0;"></p>
+            
+            <button type="button" onclick="submitEnrollment()" class="btn-primary" style="margin-top:20px;">SUBMIT DATA</button>
+            <center><a href="#" onclick="showLogin()" style="color:white; font-size:12px;">← Back to Login</a></center>
+        </div>
+    </div>
+</div>
+
+<div id="portalHeader" style="background: rgba(0,0,0,0.3); width: 100%; padding: 15px; text-align: center; border-bottom: 1px solid var(--primary); display:none; flex-wrap: wrap; justify-content: center; gap: 10px; align-items: center;">
+    <div>
+        <label style="font-size: 14px;">📅 Date: </label>
+        <input type="date" id="portalDate" style="width: auto; padding: 6px; border-radius: 8px; border: 1px solid var(--primary); background: #1a1a2e; color: white;">
+    </div>
+    
+    <div>
+        <select id="terminalMode" style="width: auto; padding: 6px; border-radius: 8px; border: 1px solid #f39c12; background: #302b63; color: white; font-weight: bold;">
+            <option value="gate">🏛️ Main Campus Gate</option>
+            <option value="bus">🚌 Transport Bus</option>
+        </select>
+    </div>
+
+    <button onclick="lockDate()" id="lockBtn" style="width: auto; padding: 8px 20px; margin: 0; background: var(--accent); border-radius: 8px;">LOCK</button>
+    <button onclick="toggleGPSBroadcast()" id="gpsBtn" style="width: auto; padding: 8px 20px; margin: 0; background: #34495e; border-radius: 8px; color: white; border: none; cursor: pointer;">📡 GPS OFF</button>
+</div>
+
+<div id="mainPortal" style="padding: 20px; width: 95%; max-width: 650px; text-align: center; display:none; margin: 0 auto;">
+    <h1 style="margin-top: 0; text-shadow: 0 0 10px var(--primary);">GATEWAY TERMINAL</h1>
+    
+    <div style="display: flex; gap: 10px; justify-content: center; margin-bottom: 20px; flex-wrap: wrap;">
+        <a href="/attendance-report/" style="background: #e67e22; color: white; text-decoration: none; padding: 10px 20px; border-radius: 8px; font-weight: bold; box-shadow: 0 0 10px rgba(230, 126, 34, 0.5); font-size: 13px;">📋 VIEW ENTRANCE DETAILS</a>
+        <a href="/admin-panel/" style="background: #e74c3c; color: white; text-decoration: none; padding: 10px 20px; border-radius: 8px; font-weight: bold; box-shadow: 0 0 10px rgba(231, 76, 60, 0.5); font-size: 13px;">🔐 ADMIN PANEL</a>
+    </div>
+    
+    <div class="nav-tabs">
+        <button class="tab-btn active" id="btn-qr" onclick="switchTab('qr')">🤳 QR Scan</button>
+        <button class="tab-btn" id="btn-live" onclick="switchTab('live')">🎥 Live Detect</button>
+        <button class="tab-btn" id="btn-face" onclick="switchTab('face')">📷 Face ID</button>
+        <button class="tab-btn" id="btn-fp" onclick="switchTab('fp')">☝️ Biometric</button>
+        <button class="tab-btn" id="btn-roll" onclick="switchTab('roll')">🔢 Manual</button>
+    </div>
+
+    <div id="qrTab" class="glass-card" style="display:block; max-width: 100%; margin: 0 auto;">
+        <div id="reader"></div>
+        <button onclick="startQR()" class="btn-primary" style="margin-top:10px; display:none;" id="startQrBtn">RESTART QR SCANNER</button>
+    </div>
+
+    <div id="liveTab" class="glass-card" style="display:none; max-width: 100%; margin: 0 auto;">
+        <h3 style="color: var(--primary); margin-top: 0;">AI CCTV Tracking (Cloud)</h3>
+        <div style="position: relative; display: inline-block; width: 100%; max-width: 500px; border-radius: 12px; border: 2px solid var(--primary); overflow: hidden;">
+            <video id="liveVideo" autoplay playsinline style="width: 100%; display: block; transform: scaleX(-1);"></video>
+            <canvas id="liveCanvas" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 10; transform: scaleX(-1);"></canvas>
+        </div>
+        <button id="startLiveBtn" onclick="toggleLiveTracking()" class="btn-primary" style="margin-top: 15px; background: #2ecc71;">🟢 START LIVE TRACKING</button>
+    </div>
+
+    <div id="faceTab" class="glass-card" style="display:none; max-width: 100%; margin: 0 auto;">
+        <input type="text" id="faceIDInput" placeholder="Enter ID for Face Match">
+        <button onclick="triggerFaceCapture()" class="btn-primary">START FACE SCAN</button>
+        <input type="file" id="faceCamera" capture="user" accept="image/*" style="display:none">
+    </div>
+
+    <div id="rollTab" class="glass-card" style="display:none; max-width: 100%; margin: 0 auto;">
+        <input type="text" id="verifyRollInput" placeholder="Enter Roll Number / ID">
+        <button onclick="verifyByRoll()" class="btn-primary">VERIFY ID</button>
+    </div>
+
+    <div id="fpTab" class="glass-card" style="display:none; max-width: 100%; margin: 0 auto;">
+        <p style="font-size: 14px; margin-bottom: 15px;">Use device passkey/fingerprint to verify</p>
+        <button onclick="verifyByFinger()" class="btn-primary" style="background: #673ab7; box-shadow: 0 0 15px #673ab7;">SCAN FINGERPRINT</button>
+    </div>
+
+    <div id="verifyStatus" style="margin-top:20px; font-weight:bold; font-size: 14px;"></div>
+
+    <div id="studentDisplay">
+        <img id="studentPhoto" src="">
+        <h2 id="studentName" style="margin:5px 0; color: var(--primary);"></h2>
+        
+        <div id="actionBadge" style="font-size:14px; font-weight:bold; padding: 6px 15px; border-radius: 8px; margin-bottom: 15px; letter-spacing: 1px; display: inline-block;"></div>
+        
+        <div id="resInfo" style="text-align: left; font-size: 14px; background: rgba(255,255,255,0.05); padding: 20px; border-radius: 12px; border-top: 3px solid var(--primary);"></div>
+    </div>
+</div>
+
+<script>
+    const csrf = '{{ csrf_token }}';
+    let temp_finger_id = "NOT_LINKED";
+    let lockedDate = "";
+    let isVerifying = false; 
+    let html5QrCode = null;
+    let isCameraOn = false; 
+
+    // 🚩 LIVE TRACKING & MODE VARIABLES
+    let gpsInterval;
+    let isBroadcasting = false;
+    let driverLat = "";
+    let driverLng = "";
+
+    let isLiveTracking = false;
+    let liveTrackingInterval = null;
+    const liveVideo = document.getElementById('liveVideo');
+    const liveCanvas = document.getElementById('liveCanvas');
+    const liveCtx = liveCanvas ? liveCanvas.getContext('2d') : null;
+
+    document.getElementById('portalDate').valueAsDate = new Date();
+
+    function selectRole(role, btnElement) {
+        document.getElementById('regType').value = role;
+        document.querySelectorAll('.role-btn').forEach(btn => btn.classList.remove('active-role'));
+        btnElement.classList.add('active-role');
+        document.querySelectorAll('.dynamic-fields').forEach(div => div.style.display = 'none');
+        document.getElementById(role + 'Fields').style.display = 'block';
+        
+        const idInput = document.getElementById('regRoll');
+        const nameInput = document.getElementById('regName');
+
+        if (role === 'student') { idInput.placeholder = "Roll Number (e.g. 22-CS-123)"; nameInput.placeholder = "Full Name"; }
+        else if (role === 'faculty') { idInput.placeholder = "Faculty ID (e.g. EMP-909)"; nameInput.placeholder = "Full Name"; }
+        else if (role === 'staff') { idInput.placeholder = "Staff ID"; nameInput.placeholder = "Full Name"; }
+        else if (role === 'guard') { idInput.placeholder = "Guard Badge ID"; nameInput.placeholder = "Full Name"; }
+        else if (role === 'visitor') { idInput.placeholder = "Visitor Pass ID / Phone No"; nameInput.placeholder = "Full Name"; }
+        else if (role === 'vehicle') { idInput.placeholder = "Vehicle Pass/Token ID"; nameInput.placeholder = "Driver Full Name"; }
+    }
+
+    function toggleVisRef(val) {
+        const detailInput = document.getElementById('regVisRefDetails');
+        if(val === "None" || val === "") {
+            detailInput.style.display = 'none';
+            detailInput.value = '';
+        } else {
+            detailInput.style.display = 'block';
+            detailInput.placeholder = val + " Name & ID / Roll#";
+        }
+    }
+
+    function showSignUp() { document.getElementById('loginSection').style.display='none'; document.getElementById('signUpSection').style.display='block'; }
+    function showLogin() { document.getElementById('loginSection').style.display='block'; document.getElementById('signUpSection').style.display='none'; }
+
+    function handleLogin() {
+        const name = document.getElementById('loginName').value;
+        const roll = document.getElementById('loginRoll').value;
+        if(!name || !roll) return alert("Credentials Lazmi Hain!");
+        
+        let fd = new FormData();
+        fd.append('name', name);
+        fd.append('roll', roll);
+        fd.append('csrfmiddlewaretoken', csrf);
+        
+        fetch('/login/', { method: 'POST', body: fd })
+        .then(res => res.json())
+        .then(data => {
+            if(data.status === 'success') {
+                document.getElementById('loginOverlay').style.opacity = '0';
+                setTimeout(() => {
+                    document.getElementById('loginOverlay').style.display = 'none';
+                    document.getElementById('mainPortal').style.display = 'block';
+                    document.getElementById('portalHeader').style.display = 'flex'; // Changed to flex for new layout
+                    lockDate();
+                    switchTab('qr'); 
+                }, 400);
+            } else {
+                alert(data.message);
+            }
+        });
+    }
+
+    function lockDate() {
+        lockedDate = document.getElementById('portalDate').value;
+        document.getElementById('lockBtn').innerText = "✅ LOCKED";
+        document.getElementById('lockBtn').style.background = "var(--success)";
+    }
+
+    async function linkFingerprint() {
+        const roll = document.getElementById('regRoll').value;
+        const status = document.getElementById('authStatus');
+        if(!roll) return alert("Pehle ID Number likhen!");
+        
+        status.innerText = "⌛ Creating Passkey...";
+        try {
+            const credential = await navigator.credentials.create({
+                publicKey: {
+                    challenge: new Uint8Array([1,2,3,4]),
+                    rp: { name: "HCSC Gateway" },
+                    user: { id: new Uint8Array([Date.now() % 255]), name: roll, displayName: roll },
+                    pubKeyCredParams: [{ alg: -7, type: "public-key" }],
+                    authenticatorSelection: { userVerification: "required", residentKey: "required" },
+                    timeout: 60000
+                }
+            });
+            temp_finger_id = btoa(String.fromCharCode(...new Uint8Array(credential.rawId)));
+            status.innerText = "✅ Fingerprint Linked!";
+            document.getElementById('fingerBtn').style.background = "var(--success)";
+        } catch (e) {
+            temp_finger_id = "BYPASS_" + Math.random().toString(36).substr(2, 9);
+            status.innerText = "⚠️ Passkey bypassed (Using Virtual ID for testing)";
+            document.getElementById('fingerBtn').style.background = "orange";
+        }
+    }
+
+    async function submitEnrollment() {
+        const name = document.getElementById('regName').value;
+        const roll = document.getElementById('regRoll').value;
+        const type = document.getElementById('regType').value;
+        const photoInput = document.getElementById('regPhoto');
+
+        if(!name || !roll || photoInput.files.length === 0) {
+            return alert("Pehle Name, ID Number aur Photo lazmi upload karein!");
+        }
+
+        document.getElementById('authStatus').innerText = "🌀 Uploading to Server...";
+
+        let fd = new FormData();
+        fd.append('name', name);
+        fd.append('roll', roll);
+        fd.append('user_type', type);
+        fd.append('photo', photoInput.files[0]);
+        fd.append('fingerprint_id', temp_finger_id);
+        fd.append('csrfmiddlewaretoken', csrf);
+
+        if (type === 'student') {
+            fd.append('department', document.getElementById('regDeptStd').value);
+            fd.append('session', document.getElementById('regSession').value);
+            fd.append('guardian_name', document.getElementById('regGuardianName').value);
+            fd.append('guardian_phone', document.getElementById('regGuardianPhone').value);
+        } else if (type === 'faculty') {
+            fd.append('department', document.getElementById('regDeptFac').value);
+            fd.append('designation', document.getElementById('regDesigFac').value);
+        } else if (type === 'staff') {
+            fd.append('department', document.getElementById('regDeptStaff').value);
+            fd.append('designation', document.getElementById('regDesigStaff').value);
+        } else if (type === 'guard') {
+            fd.append('designation', document.getElementById('regDesigGuard').value);
+        } else if (type === 'visitor') {
+            fd.append('driver_cnic', document.getElementById('regCNIC').value);
+            fd.append('purpose', document.getElementById('regPurpose').value);
+            fd.append('reference_type', document.getElementById('regVisRefType').value);
+            fd.append('reference_details', document.getElementById('regVisRefDetails').value);
+        } else if (type === 'vehicle') {
+            fd.append('vehicle_category', document.getElementById('regVehCategory').value);
+            fd.append('owner_type', document.getElementById('regVehOwnerType').value);
+            fd.append('ownership', document.getElementById('regVehOwnership').value);
+            fd.append('number_plate', document.getElementById('regVehPlate').value);
+            fd.append('driver_cnic', document.getElementById('regVehCNIC').value);
+            fd.append('driver_contact', document.getElementById('regVehContact').value);
+        }
+
+        try {
+            const resp = await fetch('/register/', { method: 'POST', body: fd });
+            const data = await resp.json();
+            alert(data.message);
+            if(data.status === 'success') showLogin();
+        } catch (e) {
+            alert("Network Error: Data submit nahi hua.");
+        }
+    }
+
+    function switchTab(tab) {
+        ['face', 'roll', 'qr', 'fp', 'live'].forEach(t => {
+            document.getElementById(t + 'Tab').style.display = (t === tab) ? 'block' : 'none';
+            document.getElementById('btn-' + t).classList.toggle('active', t === tab);
+        });
+        document.getElementById('studentDisplay').style.display = "none";
+        document.getElementById('verifyStatus').innerText = "";
+
+        if (tab === 'qr') {
+            stopLiveTracking(); 
+            startQR(); 
+        } else if (tab === 'live') {
+            stopQR(); 
+        } else {
+            stopQR();
+            stopLiveTracking();
+        }
+    }
+
+    function triggerFaceCapture() {
+        if(!document.getElementById('faceIDInput').value) return alert("Pehle ID Number likhen!");
+        document.getElementById('faceCamera').click();
+    }
+
+    // 🚩 FACE VERIFICATION
+    document.getElementById('faceCamera').onchange = async (e) => {
+        const id = document.getElementById('faceIDInput').value;
+        const status = document.getElementById('verifyStatus');
+        status.innerText = "🌀 Processing Face AI...";
+
+        let fd = new FormData();
+        fd.append('image', e.target.files[0]);
+        fd.append('roll_number', id);
+        fd.append('attendance_date', lockedDate);
+        fd.append('lat', driverLat);
+        fd.append('lng', driverLng);
+        fd.append('terminal_mode', document.getElementById('terminalMode').value); // 🚩 MODE APPENDED
+        fd.append('csrfmiddlewaretoken', csrf);
+
+        const resp = await fetch('/verify/', { method: 'POST', body: fd });
+        showResult(await resp.json());
+    };
+
+   // 🚩 MANUAL ROLL VERIFICATION
+   async function verifyByRoll() {
+        const roll = document.getElementById('verifyRollInput').value;
+        const status = document.getElementById('verifyStatus');
+
+        if(!roll) return alert("⚠️ Pehle ID / Roll Number likhein!");
+        if(!lockedDate) return alert("⚠️ Pehle upar se DATE LOCK karein!");
+
+        status.innerHTML = "🌀 ID check ho rahi hai...";
+
+        let fd = new FormData();
+        fd.append('roll_from_scanner', roll); 
+        fd.append('attendance_date', lockedDate);
+        fd.append('lat', driverLat);
+        fd.append('lng', driverLng);
+        fd.append('terminal_mode', document.getElementById('terminalMode').value); // 🚩 MODE APPENDED
+        fd.append('csrfmiddlewaretoken', csrf);
+
+        try {
+            const resp = await fetch('/verify-id/', { method: 'POST', body: fd });
+            if (!resp.ok) throw new Error(`Server Error ${resp.status}`);
+            const data = await resp.json();
+            showResult(data);
+        } catch (e) {
+            status.innerHTML = `<span style="color:#ff4d4d;">🚨 SYSTEM ERROR: ${e.message}</span>`;
+        }
+    }
+
+    function stopQR() {
+        if (html5QrCode && isCameraOn) {
+            html5QrCode.stop().then(() => { isCameraOn = false; }).catch(err => {});
+        }
+    }
+    
+    // 🚩 QR VERIFICATION
+    function startQR() {
+        const status = document.getElementById('verifyStatus');
+        document.getElementById('startQrBtn').style.display = 'none'; 
+        
+        if (isCameraOn) return; 
+        
+        if (!html5QrCode) {
+            html5QrCode = new Html5Qrcode("reader");
+        }
+        
+        status.innerText = "🟢 Ready to Scan Students...";
+        
+        html5QrCode.start(
+            { facingMode: "environment" },
+            { fps: 10, qrbox: { width: 250, height: 250 } },
+            async (decodedText, decodedResult) => {
+                if(isVerifying) return;
+                isVerifying = true;
+
+                status.innerText = "🌀 QR Scanned! Verifying with Server...";
+                let fd = new FormData();
+                fd.append('roll_from_scanner', decodedText);
+                fd.append('attendance_date', lockedDate);
+                fd.append('lat', driverLat);
+                fd.append('lng', driverLng);
+                fd.append('terminal_mode', document.getElementById('terminalMode').value); // 🚩 MODE APPENDED
+                fd.append('csrfmiddlewaretoken', csrf);
+                
+                try {
+                    const resp = await fetch('/verify-qr/', { method: 'POST', body: fd });
+                    showResult(await resp.json());
+                    setTimeout(() => { 
+                        isVerifying = false; 
+                        status.innerText = "🟢 Ready for next student...";
+                    }, 3000); 
+                } catch (e) { 
+                    status.innerHTML = `<span style="color:#ff4d4d;">❌ Network Error!</span>`; 
+                    isVerifying = false;
+                }
+            },
+            (errorMessage) => {}
+        ).then(() => {
+            isCameraOn = true; 
+        }).catch((err) => { 
+            status.innerHTML = `<span style="color:#ff4d4d;">❌ Camera Access Denied! Please click button to retry.</span>`; 
+            document.getElementById('startQrBtn').style.display = 'block';
+            isCameraOn = false;
+        });
+    }
+
+    // 🚩 FINGERPRINT VERIFICATION
+    async function verifyByFinger() {
+        const status = document.getElementById('verifyStatus');
+        status.innerText = "⌛ Waiting for Passkey...";
+        try {
+            const assertion = await navigator.credentials.get({
+                publicKey: { challenge: new Uint8Array([5,6,7,8]), userVerification: "required" }
+            });
+            let cred_id = btoa(String.fromCharCode(...new Uint8Array(assertion.rawId)));
+            status.innerText = "🌀 Verifying Biometric with Backend...";
+            
+            let fd = new FormData();
+            fd.append('cred_id', cred_id);
+            fd.append('attendance_date', lockedDate);
+            fd.append('lat', driverLat);
+            fd.append('lng', driverLng);
+            fd.append('terminal_mode', document.getElementById('terminalMode').value); // 🚩 MODE APPENDED
+            fd.append('csrfmiddlewaretoken', csrf);
+            
+            const resp = await fetch('/verify-fingerprint/', { method: 'POST', body: fd });
+            showResult(await resp.json());
+        } catch (e) { 
+            status.innerText = "❌ Scan Failed/Cancelled."; 
+            let bypassId = prompt("Fingerprint API Failed. Enter Virtual ID (Testing only):");
+            if (bypassId) {
+                let fd = new FormData();
+                fd.append('cred_id', bypassId);
+                fd.append('attendance_date', lockedDate);
+                fd.append('lat', driverLat);
+                fd.append('lng', driverLng);
+                fd.append('terminal_mode', document.getElementById('terminalMode').value); // 🚩 MODE APPENDED
+                fd.append('csrfmiddlewaretoken', csrf);
+                
+                const resp = await fetch('/verify-fingerprint/', { method: 'POST', body: fd });
+                showResult(await resp.json());
+            }
+        }
+    }
+
+    function showResult(data) {
+        const display = document.getElementById('studentDisplay');
+        const status = document.getElementById('verifyStatus');
+        
+        if(data.status === 'success') {
+            status.innerText = "✅ Verified! Move to next.";
+            display.style.display = "block";
+            document.getElementById('studentPhoto').src = data.photo_url;
+            document.getElementById('studentName').innerText = data.name;
+            
+            const actionBadge = document.getElementById('actionBadge');
+            if (data.action === 'In') {
+                actionBadge.style.background = 'rgba(46, 204, 113, 0.15)'; 
+                actionBadge.style.color = '#2ecc71';
+                actionBadge.style.border = '1px solid #2ecc71';
+                actionBadge.innerText = "🟢 ENTRY GRANTED (IN)";
+            } else if (data.action === 'Out') {
+                actionBadge.style.background = 'rgba(231, 76, 60, 0.15)'; 
+                actionBadge.style.color = '#e74c3c';
+                actionBadge.style.border = '1px solid #e74c3c';
+                actionBadge.innerText = "🔴 EXIT MARKED (OUT)";
+            }
+            
+            document.getElementById('resInfo').innerHTML = `
+                <p style="margin:5px 0; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 5px;">
+                    <b>Role:</b> <span style="color:var(--primary); font-weight:bold;">${data.type.toUpperCase()}</span>
+                </p>
+                <p style="margin:5px 0; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 5px;">
+                    <b>System ID:</b> ${data.id}
+                </p>
+                <div style="margin-top: 10px; color: #ddd;">
+                    ${data.extra || '<i style="opacity:0.6;">No extra details provided.</i>'}
+                </div>
+            `;
+            display.scrollIntoView({ behavior: 'smooth' });
+        } else {
+            display.style.display = "none";
+            status.innerHTML = `<span style="color:#ff4d4d;">❌ ${data.message}</span>`;
+        }
+    }
+
+    async function toggleLiveTracking() {
+        if (isLiveTracking) {
+            stopLiveTracking();
+        } else {
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
+                liveVideo.srcObject = stream;
+                
+                liveVideo.onloadedmetadata = () => {
+                    liveCanvas.width = liveVideo.videoWidth;
+                    liveCanvas.height = liveVideo.videoHeight;
+                    isLiveTracking = true;
+                    document.getElementById('startLiveBtn').innerText = "🛑 STOP LIVE TRACKING";
+                    document.getElementById('startLiveBtn').style.background = "#e74c3c";
+                    
+                    liveTrackingInterval = setInterval(sendLiveFrame, 2500);
+                };
+            } catch (err) {
+                alert("Camera error: " + err);
+            }
+        }
+    }
+
+    function stopLiveTracking() {
+        if (liveTrackingInterval) clearInterval(liveTrackingInterval);
+        if (liveVideo && liveVideo.srcObject) liveVideo.srcObject.getTracks().forEach(t => t.stop());
+        isLiveTracking = false;
+        document.getElementById('startLiveBtn').innerText = "🟢 START LIVE TRACKING";
+        document.getElementById('startLiveBtn').style.background = "#2ecc71";
+        if(liveCtx) liveCtx.clearRect(0, 0, liveCanvas.width, liveCanvas.height);
+    }
+
+    let isProcessingFrame = false; 
+
+    // 🚩 LIVE AI CAMERA VERIFICATION
+    function sendLiveFrame() {
+        if (!isLiveTracking || isProcessingFrame) return; 
+        isProcessingFrame = true; 
+        
+        const tempCanvas = document.createElement('canvas');
+        tempCanvas.width = liveVideo.videoWidth;
+        tempCanvas.height = liveVideo.videoHeight;
+        tempCanvas.getContext('2d').drawImage(liveVideo, 0, 0);
+        
+        const base64Img = tempCanvas.toDataURL('image/jpeg', 0.5); 
+        let fd = new FormData();
+        fd.append('image', base64Img);
+
+        const colabLink = "https://dry-baboons-wish.loca.lt/live_detect"; 
+        
+        const statusDiv = document.getElementById('verifyStatus');
+        statusDiv.innerHTML = "🌀 AI Frame process kar raha hai...";
+
+        fetch(colabLink, { 
+            method: 'POST', 
+            headers: { 'Bypass-Tunnel-Reminder': 'true' },
+            body: fd 
+        })
+        .then(r => r.json())
+        .then(data => {
+            liveCtx.clearRect(0, 0, liveCanvas.width, liveCanvas.height);
+            
+            if(data.status === 'success' && data.faces && data.faces.length > 0) {
+                data.faces.forEach(f => {
+                    liveCtx.strokeStyle = f.color;
+                    liveCtx.lineWidth = 4;
+                    liveCtx.strokeRect(f.x, f.y, f.w, f.h);
+                    liveCtx.fillStyle = f.color;
+                    liveCtx.fillRect(f.x, f.y - 30, f.w, 30);
+                    liveCtx.fillStyle = "#fff";
+                    liveCtx.font = "bold 16px Arial";
+                    liveCtx.fillText(f.name, f.x + 5, f.y - 10);
+
+                    if(f.name !== "Unknown") {
+                        statusDiv.innerHTML = `✅ Face Matched: ${f.name}! Hazri lag rahi hai...`;
+                        
+                        let attFd = new FormData();
+                        attFd.append('roll_number', f.name);
+                        attFd.append('attendance_date', lockedDate);
+                        attFd.append('lat', driverLat);
+                        attFd.append('lng', driverLng);
+                        attFd.append('terminal_mode', document.getElementById('terminalMode').value); // 🚩 MODE APPENDED
+                        attFd.append('csrfmiddlewaretoken', csrf);
+                        
+                        fetch('/fast-live-attendance/', { method: 'POST', body: attFd })
+                        .then(res => res.json())
+                        .then(djangoData => {
+                            if (djangoData.status === 'success') {
+                                showResult(djangoData); 
+                                statusDiv.innerHTML = `🌟 Hazri Done for ${f.name}!`;
+                            } else {
+                                statusDiv.innerHTML = `❌ Django Error: ${djangoData.message}`;
+                            }
+                        })
+                        .catch(err => { statusDiv.innerHTML = `🚨 Fetch Error: ${err}`; });
+                    } else {
+                        statusDiv.innerHTML = "⚠️ Chehra match nahi hua (Unknown)";
+                    }
+                });
+            } else {
+                statusDiv.innerHTML = "👀 Frame mein koi chehra nahi...";
+            }
+            
+            setTimeout(() => { isProcessingFrame = false; }, 800);
+            
+        }).catch(e => {
+            statusDiv.innerHTML = "🚨 Colab Link Masla (Link theek hai?)";
+            setTimeout(() => { isProcessingFrame = false; }, 1000);
+        });
+    }
+
+    // 🚩 LOCATION BROADCASTER LOGIC
+    function toggleGPSBroadcast() {
+        const btn = document.getElementById('gpsBtn');
+        if (isBroadcasting) {
+            clearInterval(gpsInterval);
+            isBroadcasting = false;
+            btn.innerText = "📡 START GPS BROADCAST";
+            btn.style.background = "#34495e";
+            btn.style.color = "white";
+            return;
+        }
+
+        if (!navigator.geolocation) return alert("Browser GPS support nahi karta!");
+
+        isBroadcasting = true;
+        btn.innerText = "📡 BROADCASTING LIVE...";
+        btn.style.background = "#e67e22";
+        btn.style.color = "black";
+
+        gpsInterval = setInterval(() => {
+            navigator.geolocation.getCurrentPosition((pos) => {
+                driverLat = pos.coords.latitude;
+                driverLng = pos.coords.longitude;
+                
+                let fd = new FormData();
+                fd.append('lat', driverLat);
+                fd.append('lng', driverLng);
+                fd.append('csrfmiddlewaretoken', csrf);
+                
+                fetch('/api/update-location/', { method: 'POST', body: fd })
+                .then(r => r.json())
+                .then(d => console.log("Bus Signal Sent..."))
+                .catch(e => console.log("Signal Loss"));
+            });
+        }, 5000);
+    }
+
+    // ======== GHOST CURSOR SCSS to JS COMPILATION ========
+    (function initGhostCursor() {
+        const speedCapture = document.createElement('div');
+        speedCapture.id = 'speedcapture';
+        document.body.appendChild(speedCapture);
+
+        const face = document.createElement('div');
+        face.className = 'ghost face';
+        face.innerHTML = `
+            <div class="arms"><div class="arm"></div><div class="arm"></div></div>
+            <div class="inner"><div class="mouth"></div></div>
+        `;
+        speedCapture.appendChild(face);
+
+        let styleStr = '';
+        for (let i = 1; i <= 20; i++) {
+            if (i > 1) {
+                const ghost = document.createElement('div');
+                ghost.className = 'ghost';
+                speedCapture.appendChild(ghost);
+            }
+            
+            let size = 100 - (i * 4);
+            let lightness = 100 - (i * 3);
+            let transition = i / 20;
+            let zIndex = 20 - i;
+            let delay = i / 30;
+            let randomDelay = (i / (Math.floor(Math.random() * 10) + 1)).toFixed(2);
+
+            styleStr += `
+            .ghost:nth-of-type(${i}) {
+                transition: ${transition}s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+                width: ${size}px;
+                height: ${size}px;
+                margin-left: calc(${size}px / -2);
+                margin-top: calc(${size}px / -2);
+                background: hsl(0, 0%, ${lightness}%);
+                z-index: ${zIndex};
+                animation-delay: ${delay}s;
+            }
+            .ghost:nth-of-type(${i}):before {
+                animation-delay: ${randomDelay}s;
+                opacity: 0.25;
+            }
+            `;
+        }
+        
+        const styleEl = document.createElement('style');
+        styleEl.innerHTML = styleStr;
+        document.head.appendChild(styleEl);
+
+        const ghosts = document.querySelectorAll('.ghost');
+        window.addEventListener('mousemove', (e) => {
+            ghosts.forEach(ghost => {
+                ghost.style.left = e.clientX + 'px';
+                ghost.style.top = e.clientY + 'px';
+            });
+        });
+    })();
+</script>
+</body>
+</html>

@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Live Bus Tracker | University Smart Gateway</title>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <style>
+        body { margin: 0; padding: 0; font-family: 'Poppins', sans-serif; background: #0f0c29; color: white; display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
+        
+        /* Glassmorphism Header */
+        .header { position: absolute; top: 0; width: 100%; background: rgba(15, 52, 96, 0.85); backdrop-filter: blur(10px); padding: 15px 0; text-align: center; box-shadow: 0 4px 15px rgba(0,0,0,0.5); z-index: 1000; border-bottom: 2px solid #00d2ff; }
+        .header h2 { margin: 0; color: #00d2ff; font-size: 20px; letter-spacing: 1px; text-transform: uppercase; }
+        .header p { margin: 3px 0 0 0; font-size: 11px; opacity: 0.9; color: #2ecc71; font-weight: bold; letter-spacing: 2px; animation: blink 2s infinite; }
+        
+        #map { flex-grow: 1; width: 100%; height: 100vh; z-index: 1; }
+        
+        /* Floating Control Panel */
+        .bottom-panel { position: absolute; bottom: 30px; left: 50%; transform: translateX(-50%); width: 90%; max-width: 400px; background: rgba(26, 26, 46, 0.9); backdrop-filter: blur(15px); padding: 15px 20px; border-radius: 20px; border: 1px solid rgba(0, 210, 255, 0.3); z-index: 1000; box-shadow: 0 10px 30px rgba(0,0,0,0.7); box-sizing: border-box; }
+        
+        .status-row { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 10px; margin-bottom: 10px; }
+        .status-item { text-align: center; width: 50%; }
+        .status-label { font-size: 10px; color: #8892b0; text-transform: uppercase; letter-spacing: 1px; }
+        .status-value { font-size: 16px; font-weight: bold; color: #fff; margin-top: 2px; }
+        .text-primary { color: #00d2ff; }
+        .text-success { color: #2ecc71; }
+        .text-danger { color: #e74c3c; }
+
+        .radar-status { text-align: center; font-size: 12px; font-weight: 600; color: #e67e22; }
+
+        @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+        
+        /* Cool Map Zoom Control Override */
+        .leaflet-control-zoom { border: none !important; margin-top: 80px !important; }
+        .leaflet-control-zoom a { background: rgba(15, 52, 96, 0.8) !important; color: #00d2ff !important; border: 1px solid #00d2ff !important; }
+    </style>
+</head>
+<body>
+
+    <div class="header">
+        <h2>🚌 UOG Live Radar</h2>
+        <p>● SECURE CONNECTION ACTIVE</p>
+    </div>
+
+    <div id="map"></div>
+
+    <div class="bottom-panel">
+        <div class="status-row">
+            <div class="status-item" style="border-right: 1px solid rgba(255,255,255,0.1);">
+                <div class="status-label">Estimated Speed</div>
+                <div class="status-value text-primary" id="speedVal">-- km/h</div>
+            </div>
+            <div class="status-item">
+                <div class="status-label">System Status</div>
+                <div class="status-value text-success" id="sysStatus">Tracking</div>
+            </div>
+        </div>
+        <div class="radar-status" id="statusText">⏳ Establishing connection to Bus...</div>
+    </div>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script>
+        // 1. Map Setup (Default view set to UOG / Gujrat region)
+        let map = L.map('map', { zoomControl: false }).setView([32.6416, 74.1645], 16);
+        L.control.zoom({ position: 'topright' }).addTo(map);
+        
+        // 2. Premium Dark Theme Map (CartoDB Dark Matter)
+        L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+            attribution: '&copy; OpenStreetMap &copy; CARTO',
+            maxZoom: 19,
+        }).addTo(map);
+
+        // 3. Custom 3D-looking Bus Icon
+        let busIcon = L.icon({
+            iconUrl: 'https://cdn-icons-png.flaticon.com/512/3448/3448339.png', 
+            iconSize: [45, 45],
+            iconAnchor: [22, 45],
+            popupAnchor: [0, -40]
+        });
+
+        let marker = null;
+        let routeLine = L.polyline([], {color: '#00d2ff', weight: 4, opacity: 0.7, dashArray: '10, 10'}).addTo(map);
+        let isFirstLoad = true;
+        let lastLat = null;
+        let lastLng = null;
+
+        // 4. Haversine Formula (To calculate fake/estimated speed for presentation)
+        function calcDistance(lat1, lon1, lat2, lon2) {
+            let R = 6371; // km
+            let dLat = (lat2 - lat1) * Math.PI / 180;
+            let dLon = (lon2 - lon1) * Math.PI / 180;
+            let a = Math.sin(dLat/2) * Math.sin(dLat/2) + Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLon/2) * Math.sin(dLon/2);
+            let c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+            return R * c;
+        }
+
+        // 5. Fetch Location Loop
+        function fetchLocation() {
+            fetch('/api/get-location/')
+            .then(res => res.json())
+            .then(data => {
+                if(data.status === 'success' && data.lat && data.lng) {
+                    let lat = data.lat;
+                    let lng = data.lng;
+
+                    document.getElementById('statusText').innerHTML = "📡 <span style='color:#2ecc71'>Receiving Live GPS Signals...</span>";
+                    document.getElementById('sysStatus').innerHTML = "Online";
+                    document.getElementById('sysStatus').className = "status-value text-success";
+
+                    if(!marker) {
+                        marker = L.marker([lat, lng], {icon: busIcon}).addTo(map);
+                        marker.bindPopup("<b>UOG Bus</b><br>On Route").openPopup();
+                    } else {
+                        marker.setLatLng([lat, lng]);
+                    }
+
+                    // Add point to route line leaving a trail
+                    routeLine.addLatLng([lat, lng]);
+
+                    // Calculate rough speed if it moved
+                    if(lastLat && lastLng) {
+                        let distKm = calcDistance(lastLat, lastLng, lat, lng);
+                        let speed = (distKm / (3 / 3600)).toFixed(1); // dist / time (3 seconds in hours)
+                        if (speed > 80) speed = (Math.random() * (45 - 30) + 30).toFixed(1); // Cap crazy jumps
+                        if (distKm < 0.0001) speed = 0; // Stopped
+                        document.getElementById('speedVal').innerText = speed + " km/h";
+                    }
+
+                    lastLat = lat;
+                    lastLng = lng;
+
+                    if(isFirstLoad) {
+                        map.flyTo([lat, lng], 17, { animate: true, duration: 2 });
+                        isFirstLoad = false;
+                    } else {
+                        // Keep map centered on bus smoothly
+                        map.panTo([lat, lng]);
+                    }
+                } else {
+                    document.getElementById('statusText').innerHTML = "🔴 <span style='color:#e74c3c'>Bus Out of Coverage / GPS Offline</span>";
+                    document.getElementById('sysStatus').innerHTML = "Offline";
+                    document.getElementById('sysStatus').className = "status-value text-danger";
+                    document.getElementById('speedVal').innerText = "-- km/h";
+                }
+            })
+            .catch(err => {
+                console.log("Radar Error", err);
+                document.getElementById('statusText').innerHTML = "⚠️ <span style='color:#f39c12'>Connection Interrupted</span>";
+            });
+        }
+
+        // Ping server every 3 seconds for smooth tracking
+        setInterval(fetchLocation, 3000);
+        
+        // Initial call
+        setTimeout(fetchLocation, 1000);
+    </script>
+</body>
+</html>

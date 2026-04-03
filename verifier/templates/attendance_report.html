@@ -1,0 +1,309 @@
+{% load tz %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>University Smart Gateway | Advanced Attendance Log</title>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600&display=swap" rel="stylesheet">
+    
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+
+    <style>
+        :root { --primary: #00d2ff; --glass: rgba(255, 255, 255, 0.05); }
+        body { font-family: 'Poppins', sans-serif; background: linear-gradient(135deg, #0f0c29, #302b63, #24243e); color: white; margin: 0; padding: 40px; min-height: 100vh; }
+        
+        .container { max-width: 1150px; margin: auto; }
+        .glass-card { background: var(--glass); backdrop-filter: blur(15px); border: 1px solid rgba(255,255,255,0.1); padding: 30px; border-radius: 20px; box-shadow: 0 15px 35px rgba(0,0,0,0.5); overflow-x: auto; }
+        
+        .header-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; flex-wrap: wrap; }
+        .live-clock { font-size: 28px; font-weight: bold; color: var(--primary); text-shadow: 0 0 10px rgba(0,210,255,0.4); background: rgba(0,0,0,0.3); padding: 10px 20px; border-radius: 12px; border: 1px solid rgba(0,210,255,0.2); }
+        
+        .controls { display: flex; gap: 15px; margin-bottom: 20px; background: rgba(0,0,0,0.3); padding: 20px; border-radius: 15px; border-left: 4px solid var(--primary); align-items: flex-end; flex-wrap: wrap; }
+        .input-group { flex: 1; min-width: 200px; }
+        .input-group label { font-size: 12px; color: var(--primary); display: block; margin-bottom: 5px; font-weight: bold; letter-spacing: 1px; }
+        input, select { width: 100%; background: rgba(0,0,0,0.5); border: 1px solid rgba(255,255,255,0.2); color: white; padding: 12px; border-radius: 8px; font-family: inherit; outline: none; box-sizing: border-box; }
+        input:focus, select:focus { border-color: var(--primary); }
+        select option { background: #302b63; color: white; }
+        button { background: var(--primary); color: #0f0c29; border: none; padding: 12px 25px; border-radius: 8px; font-weight: bold; cursor: pointer; transition: 0.3s; height: 43px; }
+        button:hover { box-shadow: 0 0 15px var(--primary); transform: translateY(-2px); }
+        
+        .role-selector { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; margin-bottom: 25px; }
+        .role-btn { flex: 1 1 12%; background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.1); color: white; padding: 10px; border-radius: 10px; cursor: pointer; transition: 0.3s; font-size: 11px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 5px; }
+        .role-btn:hover { background: rgba(255,255,255,0.1); }
+        .role-btn.active-role { background: var(--primary); color: #000; font-weight: bold; border-color: var(--primary); box-shadow: 0 0 15px rgba(0, 210, 255, 0.4); transform: scale(1.05); }
+
+        .export-section { display: flex; justify-content: flex-end; gap: 10px; margin-bottom: 15px; }
+        .btn-export { display: flex; align-items: center; gap: 8px; padding: 10px 15px; font-size: 13px; font-weight: bold; color: white; border: none; border-radius: 8px; cursor: pointer; transition: 0.3s; height: auto; }
+        .btn-pdf { background: #e74c3c; box-shadow: 0 4px 10px rgba(231, 76, 60, 0.4); }
+        .btn-pdf:hover { background: #c0392b; transform: translateY(-2px); }
+        .btn-excel { background: #27ae60; box-shadow: 0 4px 10px rgba(39, 174, 96, 0.4); }
+        .btn-excel:hover { background: #219150; transform: translateY(-2px); }
+
+        table { width: 100%; border-collapse: collapse; margin-top: 10px; min-width: 900px; }
+        th { color: var(--primary); text-align: left; padding: 15px; border-bottom: 2px solid var(--primary); background: rgba(0,0,0,0.2); font-size: 13px; text-transform: uppercase; }
+        td { padding: 15px; border-bottom: 1px solid rgba(255,255,255,0.05); vertical-align: middle; font-size: 14px; }
+        tr:hover td { background: rgba(255,255,255,0.02); }
+        
+        .table-img { width: 45px; height: 45px; border-radius: 50%; border: 2px solid var(--primary); object-fit: cover; box-shadow: 0 0 8px rgba(0,210,255,0.3); }
+        .btn-back { color: white; text-decoration: none; font-size: 14px; display: inline-block; margin-bottom: 15px; padding: 10px 20px; background: rgba(255,255,255,0.1); border-radius: 8px; transition: 0.3s; }
+        .btn-back:hover { background: rgba(255,255,255,0.2); }
+        
+        .status-badge { padding: 5px 10px; border-radius: 6px; font-size: 11px; font-weight: bold; letter-spacing: 0.5px; }
+        .badge-in { background: rgba(46, 204, 113, 0.15); color: #2ecc71; border: 1px solid #2ecc71; }
+        .badge-out { background: rgba(255, 255, 255, 0.1); color: #ddd; border: 1px solid rgba(255,255,255,0.2); }
+        
+        .extra-details p { margin: 3px 0; font-size: 12px; color: #aaa; }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <div class="header-top">
+            <div>
+                <h1 style="margin:0; text-shadow: 0 0 10px var(--primary); letter-spacing: 1px;">GATEWAY LOGS</h1>
+                <p style="opacity:0.7; margin: 5px 0 0 0;">Live Tracking & Duration Reports</p>
+            </div>
+            <div class="live-clock" id="clock">00:00:00 AM</div>
+        </div>
+
+        <div class="glass-card">
+            <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap;">
+                <a href="/" class="btn-back">← Back to Terminal</a>
+                
+                <div class="export-section">
+                    <button onclick="exportToPDF()" class="btn-export btn-pdf">📄 Download PDF</button>
+                    <button onclick="exportToExcel()" class="btn-export btn-excel">📊 Export Excel</button>
+                </div>
+            </div>
+            
+            <form method="GET" class="controls">
+                <div class="input-group" style="flex: 0.5;">
+                    <label>📅 SELECT DATE</label>
+                    <input type="date" name="date" value="{{ selected_date }}" id="currentDate" onchange="this.form.submit()">
+                </div>
+                
+                <div class="input-group" style="flex: 0.7;">
+                    <label>🔍 SEARCH ID</label>
+                    <div style="display: flex; gap: 5px;">
+                        <input type="text" name="search_id" value="{{ search_id }}" placeholder="ID / Roll No">
+                        <button type="submit">GO</button>
+                    </div>
+                </div>
+                
+                <div class="input-group" style="flex: 1.2;">
+                    <label>🏢 FILTER BY DEPARTMENT</label>
+                    <select id="deptFilter" onchange="applyFilters()">
+                        <option value="all">View All Departments</option>
+                        <option value="Computer Science">Computer Science</option>
+                        <option value="Information Technology">Information Technology</option>
+                        <option value="Software Engineering">Software Engineering</option>
+                        <option value="None">Non-Departmental (Guards/Visitors)</option>
+                    </select>
+                </div>
+            </form>
+
+            <div class="role-selector" data-html2canvas-ignore="true">
+                <button type="button" class="role-btn active-role" onclick="filterRole('all', this)"><span style="font-size: 16px;">🌐</span> All</button>
+                <button type="button" class="role-btn" onclick="filterRole('student', this)"><span style="font-size: 16px;">🎓</span> Students</button>
+                <button type="button" class="role-btn" onclick="filterRole('faculty', this)"><span style="font-size: 16px;">👨‍🏫</span> Faculty</button>
+                <button type="button" class="role-btn" onclick="filterRole('staff', this)"><span style="font-size: 16px;">💼</span> Staff</button>
+                <button type="button" class="role-btn" onclick="filterRole('guard', this)"><span style="font-size: 16px;">🛡️</span> Guards</button>
+                <button type="button" class="role-btn" onclick="filterRole('visitor', this)"><span style="font-size: 16px;">🚶</span> Visitors</button>
+            </div>
+
+            <div id="printArea">
+                <h2 style="display: none; color: black; text-align: center; margin-bottom: 20px;" id="pdfTitle">
+                    University Attendance Log - {{ selected_date }}
+                </h2>
+                
+                <table id="attendanceTable">
+                    <thead>
+                        <tr>
+                            <th data-exclude="true">Photo</th> 
+                            <th>Name & ID</th>
+                            <th>Role & Info</th>
+                            <th>Time IN</th>
+                            <th>Time OUT</th>
+                            <th>Status / Duration</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for log in logs %}
+                        <tr class="log-row" data-role="{{ log.person.user_type }}" data-dept="{{ log.person.department|default:'None' }}">
+                            <td data-exclude="true">
+                                {% if log.person.reference_photo %}
+                                    <img src="{{ log.person.reference_photo.url }}" class="table-img" alt="Photo">
+                                {% else %}
+                                    <div class="table-img" style="display:flex; align-items:center; justify-content:center; background:rgba(255,255,255,0.1); font-size:20px;">👤</div>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <div style="font-weight: 600; font-size: 15px; color: var(--primary);">{{ log.person.name }}</div>
+                                <code style="background:rgba(0,0,0,0.4); padding: 3px 6px; border-radius:4px; font-size:12px;">{{ log.person.id_number }}</code>
+                            </td>
+                            <td class="extra-details">
+                                <span style="background: rgba(255,255,255,0.1); padding: 3px 8px; border-radius: 4px; font-size: 11px; font-weight:bold; color: white;">{{ log.person.get_user_type_display|upper }}</span>
+                                <div style="margin-top: 5px;">{{ log.person.extra_html|safe }}</div>
+                            </td>
+                            <td style="color:#2ecc71; font-weight:bold;">
+                                {{ log.entry_time|localtime|time:"h:i A" }}
+                            </td>
+                            <td>
+                                {% if log.exit_time %}
+                                    <span style="color:#e74c3c; font-weight:bold;">{{ log.exit_time|localtime|time:"h:i A" }}</span>
+                                {% else %}
+                                    <span style="color:#f39c12; font-size: 12px;">-- Not Exited --</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if log.exit_time %}
+                                    <span class="status-badge badge-out">🕒 {{ log.entry_time|timesince:log.exit_time }}</span>
+                                {% else %}
+                                    <span class="status-badge badge-in">🟢 INSIDE CAMPUS</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr id="mainEmptyRow">
+                            <td colspan="6" style="text-align:center; padding:50px; opacity:0.6;">
+                                <div style="font-size: 30px; margin-bottom:10px;">📭</div>
+                                No attendance records logged for this date yet.
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+
+                {% if logs.paginator.num_pages > 1 %}
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 20px; padding: 15px; background: rgba(0,0,0,0.3); border-radius: 12px;" data-html2canvas-ignore="true">
+                    <span style="font-size: 13px; color: var(--primary);">Page <strong>{{ logs.number }}</strong> of <strong>{{ logs.paginator.num_pages }}</strong></span>
+                    <div style="display: flex; gap: 10px;">
+                        {% if logs.has_previous %}
+                            <a href="?date={{ selected_date }}&search_id={{ search_id }}&page={{ logs.previous_page_number }}" style="color: black; text-decoration: none; padding: 8px 15px; background: var(--primary); font-weight: bold; border-radius: 6px; font-size: 12px;">Prev</a>
+                        {% endif %}
+                        {% if logs.has_next %}
+                            <a href="?date={{ selected_date }}&search_id={{ search_id }}&page={{ logs.next_page_number }}" style="color: black; text-decoration: none; padding: 8px 15px; background: var(--primary); font-weight: bold; border-radius: 6px; font-size: 12px;">Next</a>
+                        {% endif %}
+                    </div>
+                </div>
+                {% endif %}
+
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function updateClock() {
+            const now = new Date();
+            let hours = now.getHours(); let minutes = now.getMinutes(); let seconds = now.getSeconds();
+            let ampm = hours >= 12 ? 'PM' : 'AM';
+            hours = hours % 12; hours = hours ? hours : 12; 
+            minutes = minutes < 10 ? '0' + minutes : minutes;
+            seconds = seconds < 10 ? '0' + seconds : seconds;
+            document.getElementById('clock').innerText = hours + ':' + minutes + ':' + seconds + ' ' + ampm;
+        }
+        setInterval(updateClock, 1000); updateClock(); 
+
+        let currentRole = 'all';
+
+        function filterRole(role, btnElement) {
+            document.querySelectorAll('.role-btn').forEach(btn => btn.classList.remove('active-role'));
+            btnElement.classList.add('active-role');
+            currentRole = role;
+            applyFilters();
+        }
+
+        function applyFilters() {
+            const selectedDept = document.getElementById('deptFilter').value;
+            const rows = document.querySelectorAll('.log-row');
+
+            rows.forEach(row => {
+                const rowRole = row.getAttribute('data-role');
+                let rowDept = row.getAttribute('data-dept');
+                if(!rowDept || rowDept === "None") rowDept = "None";
+
+                const roleMatch = (currentRole === 'all' || rowRole === currentRole);
+                const deptMatch = (selectedDept === 'all' || rowDept === selectedDept);
+
+                row.style.display = (roleMatch && deptMatch) ? '' : 'none';
+            });
+        }
+
+        // 📊 EXCEL EXPORT (Updated for new columns)
+        function exportToExcel() {
+            const dateVal = document.getElementById('currentDate').value;
+            const fileName = `HCSC_Attendance_${dateVal}.xlsx`;
+            
+            let table = document.getElementById("attendanceTable");
+            let wbTable = document.createElement("table");
+            
+            let thead = document.createElement("thead");
+            let trHead = document.createElement("tr");
+            trHead.innerHTML = "<th>Name & ID</th><th>Role / Details</th><th>Time IN</th><th>Time OUT</th><th>Status / Duration</th>";
+            thead.appendChild(trHead);
+            wbTable.appendChild(thead);
+            
+            let tbody = document.createElement("tbody");
+            const rows = table.querySelectorAll(".log-row");
+            
+            rows.forEach(row => {
+                if(row.style.display !== 'none') {
+                    let tr = document.createElement("tr");
+                    let cells = row.querySelectorAll("td");
+                    
+                    let nameText = cells[1].innerText.replace(/\n/g, ' - ');
+                    let detailsText = cells[2].innerText.replace(/\n/g, ' | ');
+                    let timeIn = cells[3].innerText;
+                    let timeOut = cells[4].innerText;
+                    let status = cells[5].innerText;
+
+                    tr.innerHTML = `<td>${nameText}</td><td>${detailsText}</td><td>${timeIn}</td><td>${timeOut}</td><td>${status}</td>`;
+                    tbody.appendChild(tr);
+                }
+            });
+            wbTable.appendChild(tbody);
+
+            let wb = XLSX.utils.table_to_book(wbTable, {sheet:"Logs"});
+            XLSX.writeFile(wb, fileName);
+        }
+
+        function exportToPDF() {
+            const dateVal = document.getElementById('currentDate').value;
+            const element = document.getElementById('printArea');
+            const pdfTitle = document.getElementById('pdfTitle');
+            
+            pdfTitle.style.display = 'block';
+            element.style.background = 'white';
+            element.style.color = 'black';
+            element.style.padding = '20px';
+            
+            const hideElements = document.querySelectorAll('[data-exclude="true"]');
+            hideElements.forEach(el => el.style.display = 'none');
+
+            const tds = element.querySelectorAll('td, th');
+            tds.forEach(td => {
+                td.style.color = 'black';
+                td.style.border = '1px solid #ccc';
+            });
+
+            const opt = {
+                margin:       0.3,
+                filename:     `HCSC_Logs_${dateVal}.pdf`,
+                image:        { type: 'jpeg', quality: 0.98 },
+                html2canvas:  { scale: 2, useCORS: true },
+                jsPDF:        { unit: 'in', format: 'a4', orientation: 'landscape' } 
+            };
+
+            html2pdf().set(opt).from(element).save().then(() => {
+                pdfTitle.style.display = 'none';
+                element.style.background = 'transparent';
+                element.style.color = 'white';
+                element.style.padding = '0';
+                hideElements.forEach(el => el.style.display = '');
+                tds.forEach(td => { td.style.color = ''; td.style.border = ''; });
+            });
+        }
+    </script>
+</body>
+</html>
